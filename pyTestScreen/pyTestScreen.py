@@ -4,11 +4,13 @@ from PyQt5.QtCore import QDir, Qt, QUrl
 from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer, QMediaPlaylist
 from PyQt5.QtMultimediaWidgets import QVideoWidget
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
-        QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGridLayout)
+        QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGridLayout,QDesktopWidget)
 from PyQt5.QtWidgets import QMainWindow,QWidget, QPushButton, QAction, QListWidget, QMessageBox
 from PyQt5.QtGui import QIcon
 import sys
 #https://doc-snapshots.qt.io/qtforpython/PySide2/QtMultimedia/QMediaPlayer.html
+
+
 class VideoWindow(QMainWindow):
 
     def __init__(self, parent=None):
@@ -119,7 +121,6 @@ class VideoWindow(QMainWindow):
             self.mediaPlayer.pause()
 
     
-
 class Controles(QMainWindow):
 
     def __init__(self, parent = None):
@@ -130,7 +131,11 @@ class Controles(QMainWindow):
         self.Reproduciendo = False
 
         self.videoVentana = VideoWindow()
+
         self.videoVentana.resize(640, 480)
+        #self.monitor = QDesktopWidget().screenGeometry(0)
+        #self.videoVentana.setGeometry(self.monitor)
+        #self.videoVentana.move(monitor.left(), monitor.top())
 
         #self.setLayout(layout)
         self.listwidget = QListWidget()
@@ -243,7 +248,10 @@ class Controles(QMainWindow):
         wid.setLayout(layout)
 
     def elegirPantalla(self):
-        QMessageBox.question(self, 'Alerta', "Función no implementada aún.", QMessageBox.Ok)
+        self.seleccionarP = SeleccionPantalla()
+        self.seleccionarP.SeleccionarWidget(self.videoVentana)
+        self.seleccionarP.resize(400,300)
+        self.seleccionarP.show()
         
     def listclicked(self, qmodelindex):
         #item = self.listwidget.currentItem()
@@ -263,7 +271,7 @@ class Controles(QMainWindow):
         self.listwidget.insertItem(self.listwidget.count(), fileName)
         try:
             self.videoVentana.addFile(fileName)
-        except Exceptios as err:
+        except Exception as err:
             self.listwidget.removeItemWidget(self.listwidget.itemAt(self.listwidget.count()-1))
             self.Reproduciendo = False
             self.videoVentana = VideoWindow()
@@ -279,7 +287,7 @@ class Controles(QMainWindow):
 
         try:
             self.videoVentana.addFile(fileName)
-        except Exceptios as err:
+        except Exception as err:
             self.listwidget.removeItemWidget(self.listwidget.itemAt(self.listwidget.count()-1))
             self.Reproduciendo = False
             self.videoVentana = VideoWindow()
@@ -336,6 +344,60 @@ class Controles(QMainWindow):
     def handleError(self):
         #self.playButton.setEnabled(False)
         self.errorLabel.setText("Error: " + self.videoVentana.mediaPlayer.errorString())
+
+class SeleccionPantalla(QMainWindow):
+
+    def __init__(self, parent = None):
+        super(SeleccionPantalla, self).__init__(parent)
+        
+        self.setWindowFlags(Qt.WindowStaysOnTopHint)
+        self.setWindowTitle("Selección de pantalla") 
+        self.videoVentana = VideoWindow()
+        
+        #self.setLayout(layout)
+        self.listwidget = QListWidget()
+        for x in range(0,QDesktopWidget().screenCount()):
+            self.listwidget.insertItem(0, "Pantalla "+str(x))
+        #self.listwidget.clicked.connect(self.listclicked)
+        
+        self.seleccionarButton = QPushButton()
+        self.seleccionarButton.setEnabled(True)
+        self.seleccionarButton.setText("Elegir")
+        self.seleccionarButton.clicked.connect(self.SeleccionarPantalla1)
+        
+        # Create a widget for window contents
+        wid = QWidget(self)
+        self.setCentralWidget(wid)
+
+        # Create layouts to place inside widget
+        #controlLayout = QHBoxLayout()
+        controlLayout = QGridLayout()
+        #controlLayout.setContentsMargins(0, 0, 0, 0)
+                                    # row, col, rowspan, colspan#
+        controlLayout.addWidget(self.listwidget,0,0,6,4)
+        controlLayout.addWidget(self.seleccionarButton,0,4,1,1)
+
+        layout = QVBoxLayout()
+        layout.addLayout(controlLayout)
+
+        # Set widget to contain window contents
+        wid.setLayout(layout)
+
+
+    def SeleccionarWidget(self,widget):
+        self.videoVentana = widget
+
+    def SeleccionarPantalla1(self):
+        try:
+            index = self.listwidget.currentRow()
+            self.monitor = QDesktopWidget().screenGeometry(index)
+            self.videoVentana.setGeometry(self.monitor)
+            #self.videoVentana.move(monitor.left(), monitor.top())
+        except Exception as err:
+            print(err)
+            
+        
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
