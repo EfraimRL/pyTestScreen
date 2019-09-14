@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
 from PyQt5.QtWidgets import QMainWindow,QWidget, QPushButton, QAction, QListWidget, QMessageBox
 from PyQt5.QtGui import QIcon
 import sys
+import os
 #https://doc-snapshots.qt.io/qtforpython/PySide2/QtMultimedia/QMediaPlayer.html
 
 
@@ -284,7 +285,7 @@ class Controles(QMainWindow):
         #item = self.listwidget.currentItem()
         item = self.listwidget.currentIndex()
         #print(item.text())
-        print(item.row())
+        #print(item.row())
 
     
     def addFile(self):
@@ -293,7 +294,17 @@ class Controles(QMainWindow):
         except:
             fileName, _ = QFileDialog.getOpenFileName(self, "Seleccionar video",QDir.homePath())
 
-        self.listwidget.insertItem(self.listwidget.count(), fileName)
+        if fileName=='':
+            return
+        for x in range(0,self.listwidget.count()):
+            try:
+                if self.listwidget.itemAt(x,0).text()==fileName:
+                    QMessageBox.question(self, 'Alerta', "Video ya en la lista", QMessageBox.Ok)
+                    return
+            except Exception as err:
+                print(err)
+                return
+        self.listwidget.insertItem(self.listwidget.count(), os.path.splitext(os.path.basename(fileName))[0])
         try:
             self.videoVentana.addFile(fileName)
         except Exception as err:
@@ -382,7 +393,7 @@ class SeleccionPantalla(QMainWindow):
         #self.setLayout(layout)
         self.listwidget = QListWidget()
         for x in range(0,QDesktopWidget().screenCount()):
-            self.listwidget.insertItem(0, "Pantalla "+str(x))
+            self.listwidget.insertItem(x, "Pantalla "+str(x))
         
         self.seleccionarButton = QPushButton()
         self.seleccionarButton.setEnabled(True)
@@ -413,6 +424,7 @@ class SeleccionPantalla(QMainWindow):
             index = self.listwidget.currentRow()
             self.monitor = QDesktopWidget().screenGeometry(index)
             self.videoVentana.setGeometry(self.monitor)
+            self.videoVentana.FullScreen()
             self.close()
         except Exception as err:
             print(err)
