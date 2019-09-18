@@ -10,8 +10,6 @@ from PyQt5.QtGui import QIcon
 import sys
 import os
 #https://doc-snapshots.qt.io/qtforpython/PySide2/QtMultimedia/QMediaPlayer.html
-
-
 class VideoWindow(QMainWindow):
 
     def __init__(self, parent=None):
@@ -98,7 +96,7 @@ class VideoWindow(QMainWindow):
 
     def addFile(self, filename=''):
         try:
-            if filename!='':
+            if filename != '':
                 self.mediaPlayer.playlist().addMedia(QMediaContent(QUrl.fromLocalFile(filename)))
         except Exception as err:
             QMessageBox.question(self, 'Error', "Formato no compatible.", QMessageBox.Ok)
@@ -147,15 +145,16 @@ class VideoWindow(QMainWindow):
     
 class Controles(QMainWindow):
 
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(Controles, self).__init__(parent)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
         self.setWindowTitle("Controles") 
+        self.indexPantalla = 0
         
         self.Reproduciendo = False
 
         self.videoVentana = VideoWindow()
-        self.videoVentana.setWindowFlags(Qt.Window	| Qt.WindowMinimizeButtonHint	| Qt.WindowMaximizeButtonHint);
+        self.videoVentana.setWindowFlags(Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
         self.videoVentana.resize(640, 480)
         #self.monitor = QDesktopWidget().screenGeometry(0)
         #self.videoVentana.setGeometry(self.monitor)
@@ -190,17 +189,18 @@ class Controles(QMainWindow):
         self.abrirListaButton.setEnabled(True)
         self.abrirListaButton.setText(" ")
         self.abrirListaButton.setIcon(self.style().standardIcon(QStyle.SP_FileDialogNewFolder))
-        self.abrirListaButton.clicked.connect(self.addFile)
+        self.abrirListaButton.clicked.connect(self.openList)
 
         self.guardarListaButton = QPushButton()
         self.guardarListaButton.setEnabled(True)
         self.guardarListaButton.setText(" ")
         self.guardarListaButton.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        self.guardarListaButton.clicked.connect(self.addFile)
+        self.guardarListaButton.clicked.connect(self.saveList)
 
         self.quitarButton = QPushButton()
         self.quitarButton.setEnabled(True)
-        self.quitarButton.setText("Quitar -")
+        self.quitarButton.setText("-")
+        self.quitarButton.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
         self.quitarButton.clicked.connect(self.removeFile)
 
         self.showPlayerButton = QPushButton()
@@ -222,6 +222,16 @@ class Controles(QMainWindow):
         self.screensButton.setEnabled(True)
         self.screensButton.setText("Cambiar pantalla")
         self.screensButton.clicked.connect(self.elegirPantalla)
+
+        self.sigScreenButton = QPushButton()
+        self.sigScreenButton.setEnabled(True)
+        self.sigScreenButton.setText(">")
+        self.sigScreenButton.clicked.connect(self.sigPantalla)
+        
+        self.antScreenButton = QPushButton()
+        self.antScreenButton.setEnabled(True)
+        self.antScreenButton.setText("<")
+        self.antScreenButton.clicked.connect(self.antPantalla)
 
         self.lblMediaActual = QLabel()
         self.lblMediaActual.setText("Media actual: No seleccionado.")
@@ -252,8 +262,11 @@ class Controles(QMainWindow):
         controlLayout.addWidget(self.playButton,2,4,1,1)
         controlLayout.addWidget(self.stopButton,3,4,1,1)
         controlLayout.addWidget(self.anadirButton,4,4,1,1)
+        controlLayout.addWidget(self.quitarButton,4,5,1,1)
         controlLayout.addWidget(self.lblMediaActual,5,4,1,4)
         controlLayout.addWidget(self.abrirListaButton,2,5,1,1)
+        controlLayout.addWidget(self.sigScreenButton,2,7,1,1)
+        controlLayout.addWidget(self.antScreenButton,3,7,1,1)
         controlLayout.addWidget(self.guardarListaButton,3,5,1,1)
         controlLayout.addWidget(self.errorLabel,8,0,1,8)
 
@@ -269,11 +282,27 @@ class Controles(QMainWindow):
         # Set widget to contain window contents
         wid.setLayout(layout)
 
+    def sigPantalla(self):
+        if self.indexPantalla == QDesktopWidget().screenCount() - 1:
+            self.indexPantalla = 0
+        else:
+            self.indexPantalla = self.indexPantalla + 1
+        monitor = QDesktopWidget().screenGeometry(self.indexPantalla)
+        self.videoVentana.setGeometry(monitor)
+        self.videoVentana.FullScreen()
+    def antPantalla(self):
+        if self.indexPantalla == 0:
+            self.indexPantalla = QDesktopWidget().screenCount() - 1
+        else:
+            self.indexPantalla = self.indexPantalla - 1
+        monitor = QDesktopWidget().screenGeometry(self.indexPantalla)
+        self.videoVentana.setGeometry(monitor)
+        self.videoVentana.FullScreen()
     
     def currentMediaChanged(self,actualMedia):
         titulo = str(actualMedia.canonicalUrl().fileName())
         self.videoVentana.setWindowTitle(titulo)
-        self.lblMediaActual.setText("Media actual: \n"+titulo)
+        self.lblMediaActual.setText("Media actual: \n" + titulo)
 
     def elegirPantalla(self):
         self.seleccionarP = SeleccionPantalla()
@@ -287,18 +316,39 @@ class Controles(QMainWindow):
         #print(item.text())
         #print(item.row())
 
-    
-    def addFile(self):
+    def openList(self):
         try:
-            fileName, _ = QFileDialog.getOpenFileName(self, "Seleccionar video",QDir.homePath()+"\\Videos")
+            fileName, _ = QFileDialog.getOpenFileName(self, "Seleccionar lista",QDir.homePath())
+            #f = open(fileName,"r")
+            self.listwidget.clear()
+            for line in open(fileName, 'r'):
+                self.addFile(line)
+        except  Exception as err:
+            QMessageBox.question(self, 'Alerta', "Error" + str(err), QMessageBox.Ok)
+    def saveList(self):
+        try:
+            fileName, _ = QFileDialog.getOpenFileName(self, "Seleccionar lista",QDir.homePath())
+            f = open(fileName,"w+")
+            for i in range(0,self.listwidget.count()):
+                newUrl = str(self.videoVentana.mediaPlayer.playlist().media(i).canonicalUrl().toLocalFile())
+                f.write(newUrl + "\n")
+            f.close()
+        except  Exception as err:
+            QMessageBox.question(self, 'Alerta', "Error" + str(err), QMessageBox.Ok)
+        
+
+    def addFile(self,fileName=''):        
+        try:
+            if fileName=='' or fileName==False:
+                fileName, _ = QFileDialog.getOpenFileName(self, "Seleccionar video",QDir.homePath() + "\\Videos")
         except:
             fileName, _ = QFileDialog.getOpenFileName(self, "Seleccionar video",QDir.homePath())
 
-        if fileName=='':
+        if fileName == '' or fileName==False:
             return
         for x in range(0,self.listwidget.count()):
             try:
-                if self.listwidget.itemAt(x,0).text()==fileName:
+                if self.listwidget.itemAt(x,0).text() == os.path.splitext(os.path.basename(fileName))[0]:
                     QMessageBox.question(self, 'Alerta', "Video ya en la lista", QMessageBox.Ok)
                     return
             except Exception as err:
@@ -308,7 +358,7 @@ class Controles(QMainWindow):
         try:
             self.videoVentana.addFile(fileName)
         except Exception as err:
-            self.listwidget.removeItemWidget(self.listwidget.itemAt(self.listwidget.count()-1))
+            self.listwidget.removeItemWidget(self.listwidget.itemAt(self.listwidget.count() - 1))
             self.Reproduciendo = False
             self.videoVentana = VideoWindow()
             self.videoVentana.resize(640, 480)
@@ -317,26 +367,30 @@ class Controles(QMainWindow):
 
             print(err)
 
-    def removeFile(self):        
-        index = self.listwidget.currentRow()
-        self.listwidget.removeItemWidget(self.listwidget.itemAt(index))
+    def removeFile1(self):        
+        QMessageBox.question(self, 'Alerta', "Función no implementada aún.", QMessageBox.Ok)
+        
+        #try:
+        #    self.videoVentana.addFile(fileName)
+        #except Exception as err:
+        #    self.listwidget.removeItemWidget(self.listwidget.itemAt(self.listwidget.count() - 1))
+        #    self.Reproduciendo = False
+        #    self.videoVentana = VideoWindow()
+        #    self.videoVentana.resize(640, 480)
+        #    for x in range(0,self.listwidget.count()):
+        #        self.videoVentana.addFile(self.listwidget.itemAt(x).text())
 
-        try:
-            self.videoVentana.addFile(fileName)
-        except Exception as err:
-            self.listwidget.removeItemWidget(self.listwidget.itemAt(self.listwidget.count()-1))
-            self.Reproduciendo = False
-            self.videoVentana = VideoWindow()
-            self.videoVentana.resize(640, 480)
-            for x in range(0,self.listwidget.count()):
-                self.videoVentana.addFile(self.listwidget.itemAt(x).text())
-
-            print(err)
+        #    print(err)
 
 
     def removeFile(self):
-        QMessageBox.question(self, 'Alerta', "Función no implementada aún.", QMessageBox.Ok)
-        #self.listwidget.removeItemWidget(self.listwidget.currentRow())
+        index = self.listwidget.currentRow()
+        if index!=-1:
+            try:
+                self.listwidget.removeItemWidget(self.listwidget.itemAt(index,0))
+                self.videoVentana.mediaPlayer.playlist().removeMedia(index)
+            except Exception as err:
+                print(str(err))
 
     def exitCall(self):
         sys.exit(app.exec_())
@@ -393,7 +447,7 @@ class SeleccionPantalla(QMainWindow):
         #self.setLayout(layout)
         self.listwidget = QListWidget()
         for x in range(0,QDesktopWidget().screenCount()):
-            self.listwidget.insertItem(x, "Pantalla "+str(x))
+            self.listwidget.insertItem(x, "Pantalla " + str(x))
         
         self.seleccionarButton = QPushButton()
         self.seleccionarButton.setEnabled(True)
@@ -434,7 +488,11 @@ class SeleccionPantalla(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    controles = Controles()
-    controles.resize(700,400)
-    controles.show()
+    try:
+        controles = Controles()
+        controles.resize(700,400)
+        controles.show()
+        
+    except Exception as err:
+        print("Error: " + str(err))
     sys.exit(app.exec_())
