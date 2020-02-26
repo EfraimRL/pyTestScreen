@@ -93,6 +93,8 @@ class VideoWindow(QMainWindow):
     def addFile(self, filename=''):
         try:
             if filename != '':
+                if "\n" in filename:
+                    filename = filename.replace("\n", "")
                 self.mediaPlayer.playlist().addMedia(QMediaContent(QUrl.fromLocalFile(filename)))
         except Exception as err:
             QMessageBox.question(self, 'Error', "Formato no compatible.", QMessageBox.Ok)
@@ -286,6 +288,17 @@ class Controles(QMainWindow):
 
         # Set widget to contain window contents
         wid.setLayout(layout)
+
+    def closeEvent(self, event):
+        buttonReply = QMessageBox.question(self, 'Question', "¿Close? Will close video window too.", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if buttonReply == QMessageBox.Yes:
+            self.videoVentana.close()
+            self.close()
+        else:
+            print('No clicked.')
+            event.ignore()
+            return
+        
 
     def sigPantalla(self):
         if self.indexPantalla == QDesktopWidget().screenCount() - 1:
