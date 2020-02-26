@@ -78,11 +78,8 @@ class VideoWindow(QMainWindow):
         self.showFullScreen()
 
     def openFile(self, item=''):
-
-        #fileName, _ = QFileDialog.getOpenFileName(self, "Open Movie",
-        #        QDir.homePath())
+        #fileName, _ = QFileDialog.getOpenFileName(self, "Open Movie",QDir.homePath())
         #QMessageBox.question(self, 'ITEM', item, QMessageBox.Ok)
-
         if item != '':
             self.mediaPlayer.setMedia(QMediaContent(QUrl.fromLocalFile(item)))
 
@@ -90,7 +87,6 @@ class VideoWindow(QMainWindow):
         print('setIndex(' + str(index) + ') in ' + str(self.mediaPlayer.playlist().mediaCount()))
         if index != -1:
             self.mediaPlayer.playlist().setCurrentIndex(index)
-
         for x in range(0,self.mediaPlayer.playlist().mediaCount()):
             print(self.mediaPlayer.playlist().media(x).canonicalUrl().fileName())
 
@@ -101,15 +97,26 @@ class VideoWindow(QMainWindow):
         except Exception as err:
             QMessageBox.question(self, 'Error', "Formato no compatible.", QMessageBox.Ok)
             raise
-
+    
+    def removeFile(self, index=-1):
+        if index==-1:
+            QMessageBox.question(self, 'Error', "No se eligio un elemento para borrar.", QMessageBox.Ok)
+        else:
+            try:
+                self.mediaPlayer.playlist().removeMedia(index)
+            except Exception as err:
+                print('Error al remover el archivo "'+str(index)+'", total de elementos: '+str(self.mediaPlayer.playlist().mediaCount()))
 
     def exitCall(self):
         sys.exit(app.exec_())
 
     def play(self,index=-1):
+        contador = self.count()
         if index != -1:
             self.mediaPlayer.playlist().setCurrentIndex(index)
-
+        if self.mediaPlayer.playlist().currentIndex()==-1 or self.mediaPlayer.playlist().currentIndex()>=self.count():
+            print("index del elemento a reproducir fuera del rango "+str(index)+", "+str(contador))
+            return
         if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
             self.mediaPlayer.pause()
         else:
@@ -128,13 +135,10 @@ class VideoWindow(QMainWindow):
     def center(self):
         # geometry of the main window
         qr = self.frameGeometry()
-
         # center point of screen
         cp = QDesktopWidget().availableGeometry().center()
-
         # move rectangle's center point to screen's center point
         qr.moveCenter(cp)
-
         # top left of rectangle becomes top left of window centering it
         self.move(qr.topLeft()) 
 
@@ -142,6 +146,8 @@ class VideoWindow(QMainWindow):
         if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
             self.mediaPlayer.pause()
 
+    def count(self):
+        return self.mediaPlayer.playlist().mediaCount()
     
 class Controles(QMainWindow):
 
@@ -226,11 +232,13 @@ class Controles(QMainWindow):
         self.sigScreenButton = QPushButton()
         self.sigScreenButton.setEnabled(True)
         self.sigScreenButton.setText(">")
+        self.sigScreenButton.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
         self.sigScreenButton.clicked.connect(self.sigPantalla)
         
         self.antScreenButton = QPushButton()
         self.antScreenButton.setEnabled(True)
         self.antScreenButton.setText("<")
+        self.antScreenButton.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
         self.antScreenButton.clicked.connect(self.antPantalla)
 
         self.lblMediaActual = QLabel()
@@ -241,13 +249,11 @@ class Controles(QMainWindow):
         self.positionSlider.sliderMoved.connect(self.setPosition)
 
         self.errorLabel = QLabel()
-        self.errorLabel.setSizePolicy(QSizePolicy.Preferred,
-                QSizePolicy.Maximum)
+        self.errorLabel.setSizePolicy(QSizePolicy.Preferred,  QSizePolicy.Maximum)
 
         # Create a widget for window contents
         wid = QWidget(self)
         self.setCentralWidget(wid)
-
         # Create layouts to place inside widget
         #controlLayout = QHBoxLayout()
         controlLayout = QGridLayout()
@@ -269,10 +275,9 @@ class Controles(QMainWindow):
         controlLayout.addWidget(self.antScreenButton,3,7,1,1)
         controlLayout.addWidget(self.guardarListaButton,3,5,1,1)
         controlLayout.addWidget(self.errorLabel,8,0,1,8)
-
         layout = QVBoxLayout()
         layout.addLayout(controlLayout)
-        
+        #Eventos del reproductor
         self.videoVentana.mediaPlayer.stateChanged.connect(self.mediaStateChanged)
         self.videoVentana.mediaPlayer.positionChanged.connect(self.positionChanged)
         self.videoVentana.mediaPlayer.durationChanged.connect(self.durationChanged)
@@ -312,9 +317,9 @@ class Controles(QMainWindow):
         
     def listclicked(self, qmodelindex):
         #item = self.listwidget.currentItem()
-        item = self.listwidget.currentIndex()
         #print(item.text())
         #print(item.row())
+        item = self.listwidget.currentIndex()
 
     def openList(self):
         try:
@@ -346,7 +351,7 @@ class Controles(QMainWindow):
 
         if fileName == '' or fileName==False:
             return
-        for x in range(0,self.listwidget.count()):
+        for x in range(0,self.listwidget.count()):      #Valida que no exista el archivo a agregar
             try:
                 if self.listwidget.itemAt(x,0).text() == os.path.splitext(os.path.basename(fileName))[0]:
                     QMessageBox.question(self, 'Alerta', "Video ya en la lista", QMessageBox.Ok)
@@ -357,38 +362,25 @@ class Controles(QMainWindow):
         self.listwidget.insertItem(self.listwidget.count(), os.path.splitext(os.path.basename(fileName))[0])
         try:
             self.videoVentana.addFile(fileName)
-        except Exception as err:
+        except Exception as err:                        #Si hay un error, vuelve a abrir la ventana de video y carga la lista
             self.listwidget.removeItemWidget(self.listwidget.itemAt(self.listwidget.count() - 1))
             self.Reproduciendo = False
             self.videoVentana = VideoWindow()
             self.videoVentana.resize(640, 480)
             for x in range(0,self.listwidget.count()):
                 self.videoVentana.addFile(self.listwidget.itemAt(x).text())
-
             print(err)
-
-    def removeFile1(self):        
-        QMessageBox.question(self, 'Alerta', "Función no implementada aún.", QMessageBox.Ok)
-        
-        #try:
-        #    self.videoVentana.addFile(fileName)
-        #except Exception as err:
-        #    self.listwidget.removeItemWidget(self.listwidget.itemAt(self.listwidget.count() - 1))
-        #    self.Reproduciendo = False
-        #    self.videoVentana = VideoWindow()
-        #    self.videoVentana.resize(640, 480)
-        #    for x in range(0,self.listwidget.count()):
-        #        self.videoVentana.addFile(self.listwidget.itemAt(x).text())
-
-        #    print(err)
-
 
     def removeFile(self):
         index = self.listwidget.currentRow()
         if index!=-1:
             try:
-                self.listwidget.removeItemWidget(self.listwidget.itemAt(index,0))
-                self.videoVentana.mediaPlayer.playlist().removeMedia(index)
+                cantPlayList = self.videoVentana.count()
+                self.videoVentana.removeFile(index)                             #Elimina del playlist
+                #self.videoVentana.mediaPlayer.playlist().removeMedia(index)
+                if cantPlayList != self.videoVentana.count():                   #Si se borro de la playlist
+                    self.listwidget.takeItem(index)                             #Elimina del comboBox
+                print(str(self.listwidget.count()) + "<-listWidget playlist->" + str(self.videoVentana.count()))
             except Exception as err:
                 print(str(err))
 
@@ -401,10 +393,6 @@ class Controles(QMainWindow):
 
     def stop(self):
         self.videoVentana.mediaPlayer.stop()#play/pause
-
-
-    def pause(self):#No se usa
-        self.videoVentana.pause
 
     def showPlayer(self):
         if self.showPlayerButton.text() == "  Ver   Reproductor":
