@@ -85,7 +85,11 @@ class VideoWindow(QMainWindow):
 
     def setIndex(self, index=-1):
         print('setIndex(' + str(index) + ') in ' + str(self.mediaPlayer.playlist().mediaCount()))
-        if index != -1:
+        if index < 0:
+            index = 0
+        elif index >= self.count():
+            index = self.count()-1
+        if self.count()!=0:
             self.mediaPlayer.playlist().setCurrentIndex(index)
         for x in range(0,self.mediaPlayer.playlist().mediaCount()):
             print(self.mediaPlayer.playlist().media(x).canonicalUrl().fileName())
@@ -99,7 +103,7 @@ class VideoWindow(QMainWindow):
         except Exception as err:
             QMessageBox.question(self, 'Error', "Formato no compatible.", QMessageBox.Ok)
             raise
-    
+   
     def removeFile(self, index=-1):
         if index==-1:
             QMessageBox.question(self, 'Error', "No se eligio un elemento para borrar.", QMessageBox.Ok)
@@ -109,8 +113,6 @@ class VideoWindow(QMainWindow):
             except Exception as err:
                 print('Error al remover el archivo "'+str(index)+'", total de elementos: '+str(self.mediaPlayer.playlist().mediaCount()))
 
-    def exitCall(self):
-        sys.exit(app.exec_())
 
     def play(self,index=-1):
         contador = self.count()
@@ -124,6 +126,19 @@ class VideoWindow(QMainWindow):
         else:
             self.mediaPlayer.play() 
         
+    def pause(self):
+        if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
+            self.mediaPlayer.pause()
+    
+    def stop(self):
+        self.mediaPlayer.stop()
+
+    def next(self):
+        self.setIndex(self.mediaPlayer.playlist().currentIndex()+1)
+
+    def prev(self):
+        self.setIndex(self.mediaPlayer.playlist().currentIndex()-1)
+
     def showNormalS(self):
         try:
             #self.monitor = QDesktopWidget().screenGeometry()
@@ -144,10 +159,6 @@ class VideoWindow(QMainWindow):
         # top left of rectangle becomes top left of window centering it
         self.move(qr.topLeft()) 
 
-    def pause(self):
-        if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
-            self.mediaPlayer.pause()
-
     def count(self):
         return self.mediaPlayer.playlist().mediaCount()
     
@@ -158,7 +169,6 @@ class Controles(QMainWindow):
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
         self.setWindowTitle("Controles") 
         self.indexPantalla = 0
-        
         self.Reproduciendo = False
 
         self.videoVentana = VideoWindow()
@@ -242,7 +252,7 @@ class Controles(QMainWindow):
         self.antScreenButton.setText("<")
         self.antScreenButton.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
         self.antScreenButton.clicked.connect(self.antPantalla)
-
+        
         self.lblMediaActual = QLabel()
         self.lblMediaActual.setText("Media actual: No seleccionado.")
         
@@ -289,9 +299,26 @@ class Controles(QMainWindow):
         # Set widget to contain window contents
         wid.setLayout(layout)
 
+        self.server =  Escucha(self.videoVentana)
+        self.load()
+
+    def load(self):
+        import threading
+        try:
+            threading.Thread(target=self.server.start_server, args=(800,)).start()
+            print("Server on port "+str(800))
+            #QMessageBox.question(self, 'Info', "Opening server on port "+str(800), QMessageBox.Ok)
+            
+        except  Exception as err:
+            print(str(err))
+
     def closeEvent(self, event):
         buttonReply = QMessageBox.question(self, 'Question', "¿Close? Will close video window too.", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if buttonReply == QMessageBox.Yes:
+            try:
+                self.server.stop()
+            except Exception as err:
+                print("Error at closing Thread: "+str(err))
             self.videoVentana.close()
             self.close()
         else:
@@ -405,7 +432,7 @@ class Controles(QMainWindow):
         self.videoVentana.play(item)#play/pause
 
     def stop(self):
-        self.videoVentana.mediaPlayer.stop()#play/pause
+        self.videoVentana.stop()#play/pause
 
     def showPlayer(self):
         if self.showPlayerButton.text() == "  Ver   Reproductor":
@@ -484,8 +511,109 @@ class SeleccionPantalla(QMainWindow):
         except Exception as err:
             print(err)
             
-        
+class Escucha:  #Clase que se usara para controlar desde app externa
+    # server.py
+    def __init__(self,videoWin):
+        self.videoVentana = videoWin
+        self._continuar = True
 
+    def stop(self):
+        self._continuar = False
+
+    def do_some_stuffs_with_input(self,input_string,vw):  
+        """
+        This is where all the processing happens.
+
+        Let's just read the string backwards
+        """
+        index=0
+        if input_string == "play":
+            print('Playing..')
+            vw.play()
+        elif input_string == "next":
+            print('Nexting')
+            vw.next()
+        elif input_string == "prev":
+            print("Previus")
+            vw.prev()
+        elif input_string == "stop":
+            print("Stop")
+            vw.stop()
+        elif input_string == "insr":
+            print("Insert:")
+            vw.addFile("")
+        elif input_string == "remv":
+            print("Remove index:")
+            vw.removeFile(index)
+        elif input_string == "scnx":
+            print("Change to Next Screen")
+        elif input_string == "scpv":
+            print("Change to Previus Screen")
+        elif input_string == "exit":
+            raise Exception("SALIR")
+        print("Processing that nasty input!")
+        return input_string[::-1]
+
+    def client_thread(self,conn, ip, port,vw, MAX_BUFFER_SIZE = 4096):
+
+        # the input is in bytes, so decode it
+        input_from_client_bytes = conn.recv(MAX_BUFFER_SIZE)
+
+        # MAX_BUFFER_SIZE is how big the message can be
+        # this is test if it's sufficiently big
+        import sys
+        siz = sys.getsizeof(input_from_client_bytes)
+        if  siz >= MAX_BUFFER_SIZE:
+            print("The length of input is probably too long: {}".format(siz))
+
+        # decode input and strip the end of line
+        input_from_client = input_from_client_bytes.decode("utf8").rstrip()
+
+        res = self.do_some_stuffs_with_input(input_from_client,vw)
+        print("Result of processing {} is: {}".format(input_from_client, res))
+
+        vysl = res.encode("utf8")  # encode the result string
+        conn.sendall(vysl)  # send it to client
+        conn.close()  # close connection
+        print('Connection ' + ip + ':' + port + " ended")
+
+    def start_server(self,_port):
+
+        import socket
+        soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # this is for easy starting/killing the app
+        soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        print('Socket created')
+
+        try:
+            soc.bind(("127.0.0.1", _port))
+            print('Socket bind complete')
+        except socket.error as msg:
+            import sys
+            print('Bind failed. Error : ' + str(sys.exc_info()))
+            sys.exit()
+
+        #Start listening on socket
+        soc.listen(10)
+        print('Socket now listening')
+
+        # for handling task in separate jobs we need threading
+        from threading import Thread
+
+        # this will make an infinite loop needed for 
+        # not reseting server for every client
+        while self._continuar:
+            conn, addr = soc.accept()
+            ip, port = str(addr[0]), str(addr[1])
+            print('Accepting connection from ' + ip + ':' + port)
+            try:
+                Thread(target=self.client_thread, args=(conn, ip, port,self.videoVentana)).start()
+            except:
+                print("Terible error!")
+                import traceback
+                traceback.print_exc()
+        soc.close()
+        print("Terminar")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
