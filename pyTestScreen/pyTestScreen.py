@@ -10,21 +10,42 @@ from PyQt5.QtGui import QIcon
 import sys
 import os
 #https://doc-snapshots.qt.io/qtforpython/PySide2/QtMultimedia/QMediaPlayer.html
+#Variables globales:
+puerto = 800                                    #Puerto para conexiones del servidor [socket]
+
+#Clase de reproductor, contiene la ventana y las funciones de reproducir, pausar, detener,...,siguiente.
 class VideoWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super(VideoWindow, self).__init__(parent)
         self.setWindowTitle("PyQt Video Player Widget 2 Screens")
-        
+                
         self.playlist = QMediaPlaylist()
-
         self.mediaPlayer = QMediaPlayer(None, QMediaPlayer.VideoSurface)
-
         self.mediaPlayer.setPlaylist(self.playlist)
-
         self.nombreVideoActual = ''
 
         videoWidget = QVideoWidget()
+
+        # Create a widget for window contents
+        wid = QWidget(self)
+        self.setAutoFillBackground(True)
+        p = self.palette()
+        p.setColor(self.backgroundRole(), Qt.black)
+        self.setPalette(p)
+        self.setCentralWidget(wid)
+
+        # Create layouts to place inside widget
+        controlLayout = QHBoxLayout()
+        controlLayout.setContentsMargins(0, 0, 0, 0)
+
+        layout = QVBoxLayout()
+        layout.addWidget(videoWidget)
+
+        # Set widget to contain window contents
+        wid.setLayout(layout)
+
+        self.mediaPlayer.setVideoOutput(videoWidget)
         
         # Create new action
         #openAction = QAction(QIcon('open.png'), '&Open', self)
@@ -45,34 +66,9 @@ class VideoWindow(QMainWindow):
         #fileMenu.addAction(openAction)
         #fileMenu.addAction(exitAction)
 
-        # Create a widget for window contents
-        wid = QWidget(self)
-        self.setAutoFillBackground(True)
-        p = self.palette()
-        p.setColor(self.backgroundRole(), Qt.black)
-        self.setPalette(p)
-        self.setCentralWidget(wid)
 
-        # Create layouts to place inside widget
-        controlLayout = QHBoxLayout()
-        controlLayout.setContentsMargins(0, 0, 0, 0)
-        #controlLayout.addWidget(self.playButton)
-        #controlLayout.addWidget(self.positionSlider)
-
-        layout = QVBoxLayout()
-        layout.addWidget(videoWidget)
-        #layout.addLayout(controlLayout)
-        #layout.addWidget(self.errorLabel)
-
-        # Set widget to contain window contents
-        wid.setLayout(layout)
-
-        self.mediaPlayer.setVideoOutput(videoWidget)
-        #self.mediaPlayer.stateChanged.connect(self.mediaStateChanged)
-        #self.mediaPlayer.positionChanged.connect(self.positionChanged)
-        #self.mediaPlayer.durationChanged.connect(self.durationChanged)
-        #self.mediaPlayer.error.connect(self.handleError)
-
+    def setControles(self,controles):
+        self.controles = controles
 
     def FullScreen(self):
         self.showFullScreen()
@@ -100,10 +96,19 @@ class VideoWindow(QMainWindow):
                 if "\n" in filename:
                     filename = filename.replace("\n", "")
                 self.mediaPlayer.playlist().addMedia(QMediaContent(QUrl.fromLocalFile(filename)))
+                self.controles.reload()
         except Exception as err:
             QMessageBox.question(self, 'Error', "Formato no compatible.", QMessageBox.Ok)
             raise
-   
+
+    def addURL(self, urlname=''):
+        try:
+            if urlname != '':
+                self.mediaPlayer.playlist().addMedia(QMediaContent(QUrl(urlname)))
+        except Exception as err:
+            QMessageBox.question(self, 'Error', "No se pudo agregar el video "+urlname, QMessageBox.Ok)
+            raise
+
     def removeFile(self, index=-1):
         if index==-1:
             QMessageBox.question(self, 'Error', "No se eligio un elemento para borrar.", QMessageBox.Ok)
@@ -139,6 +144,19 @@ class VideoWindow(QMainWindow):
     def prev(self):
         self.setIndex(self.mediaPlayer.playlist().currentIndex()-1)
 
+    def getListNames(self):
+        list = ""
+        cont = self.count()
+        for x in range(0,self.count()):      
+            try:                
+                media = self.mediaPlayer.playlist().media(x)
+                name = os.path.splitext(os.path.basename(media.canonicalUrl().fileName()))[0]
+                #list.append(name)   
+                list += name+"**"     
+            except Exception as err:
+                print(err)
+        return list
+
     def showNormalS(self):
         try:
             #self.monitor = QDesktopWidget().screenGeometry()
@@ -161,22 +179,22 @@ class VideoWindow(QMainWindow):
 
     def count(self):
         return self.mediaPlayer.playlist().mediaCount()
-    
+#Clase principal que muestra los controles en pantalla, para controlar lo que hace el reproductor e inicia las otras clases. 
 class Controles(QMainWindow):
 
     def __init__(self, parent=None):
         super(Controles, self).__init__(parent)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
         self.setWindowTitle("Controles") 
-        self.indexPantalla = 0
+        self.indexScreen = 0
         self.Reproduciendo = False
+        self.strButtonShow = "  Ver   Reproductor"
+        self.strButtonHide  = "Ocultar Reproductor"
 
         self.videoVentana = VideoWindow()
+        self.videoVentana.setControles(self)
         self.videoVentana.setWindowFlags(Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
         self.videoVentana.resize(640, 480)
-        #self.monitor = QDesktopWidget().screenGeometry(0)
-        #self.videoVentana.setGeometry(self.monitor)
-        #self.videoVentana.move(monitor.left(), monitor.top())
 
         self.listwidget = QListWidget()
         self.listwidget.clicked.connect(self.listclicked)
@@ -223,18 +241,18 @@ class Controles(QMainWindow):
 
         self.showPlayerButton = QPushButton()
         self.showPlayerButton.setEnabled(True)
-        self.showPlayerButton.setText("  Ver   Reproductor")
+        self.showPlayerButton.setText(self.strButtonShow)
         self.showPlayerButton.clicked.connect(self.showPlayer)
 
         self.maxButton = QPushButton()
         self.maxButton.setEnabled(True)
         self.maxButton.setText("Maximizar")
-        self.maxButton.clicked.connect(self.videoVentana.showFullScreen)
+        self.maxButton.clicked.connect(self.maximizePlayer)
 
         self.minButton = QPushButton()
         self.minButton.setEnabled(True)
         self.minButton.setText("Normal")
-        self.minButton.clicked.connect(self.videoVentana.showNormalS)
+        self.minButton.clicked.connect(self.minimizePlayer)
         
         self.screensButton = QPushButton()
         self.screensButton.setEnabled(True)
@@ -299,68 +317,34 @@ class Controles(QMainWindow):
         # Set widget to contain window contents
         wid.setLayout(layout)
 
-        self.server =  Escucha(self.videoVentana)
-        self.load()
+        #Server, receives commands to player
+        self.server =  Server(self.videoVentana)
+        self.startServer()
 
-    def load(self):
+    def startServer(self):
         import threading
         try:
-            threading.Thread(target=self.server.start_server, args=(800,)).start()
-            print("Server on port "+str(800))
+            threading.Thread(target=self.server.start_server, args=(puerto,)).start()
+            print("Server on port "+str(puerto))
             #QMessageBox.question(self, 'Info', "Opening server on port "+str(800), QMessageBox.Ok)
             
         except  Exception as err:
             print(str(err))
 
-    def closeEvent(self, event):
-        buttonReply = QMessageBox.question(self, 'Question', "¿Close? Will close video window too.", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if buttonReply == QMessageBox.Yes:
+    def reload(self):
+        self.listwidget.clear()
+        for x in range(0,self.videoVentana.count()):
             try:
-                self.server.stop()
+                newUrl = str(self.videoVentana.mediaPlayer.playlist().media(x).canonicalUrl().toLocalFile())
+                self.listwidget.insertItem(self.listwidget.count(), os.path.splitext(os.path.basename(newUrl))[0])
             except Exception as err:
-                print("Error at closing Thread: "+str(err))
-            self.videoVentana.close()
-            self.close()
-        else:
-            print('No clicked.')
-            event.ignore()
-            return
-        
-
-    def sigPantalla(self):
-        if self.indexPantalla == QDesktopWidget().screenCount() - 1:
-            self.indexPantalla = 0
-        else:
-            self.indexPantalla = self.indexPantalla + 1
-        monitor = QDesktopWidget().screenGeometry(self.indexPantalla)
-        self.videoVentana.setGeometry(monitor)
-        self.videoVentana.FullScreen()
-    def antPantalla(self):
-        if self.indexPantalla == 0:
-            self.indexPantalla = QDesktopWidget().screenCount() - 1
-        else:
-            self.indexPantalla = self.indexPantalla - 1
-        monitor = QDesktopWidget().screenGeometry(self.indexPantalla)
-        self.videoVentana.setGeometry(monitor)
-        self.videoVentana.FullScreen()
-    
-    def currentMediaChanged(self,actualMedia):
-        titulo = str(actualMedia.canonicalUrl().fileName())
-        self.videoVentana.setWindowTitle(titulo)
-        self.lblMediaActual.setText("Media actual: \n" + titulo)
-
-    def elegirPantalla(self):
-        self.seleccionarP = SeleccionPantalla()
-        self.seleccionarP.AsignarVideoWidget(self.videoVentana)
-        self.seleccionarP.resize(400,300)
-        self.seleccionarP.show()
-        
+                print(str(err))
+    #List functions
     def listclicked(self, qmodelindex):
         #item = self.listwidget.currentItem()
         #print(item.text())
         #print(item.row())
         item = self.listwidget.currentIndex()
-
     def openList(self):
         try:
             fileName, _ = QFileDialog.getOpenFileName(self, "Seleccionar lista",QDir.homePath())
@@ -380,8 +364,6 @@ class Controles(QMainWindow):
             f.close()
         except  Exception as err:
             QMessageBox.question(self, 'Alerta', "Error" + str(err), QMessageBox.Ok)
-        
-
     def addFile(self,fileName=''):        
         try:
             if fileName=='' or fileName==False:
@@ -410,7 +392,6 @@ class Controles(QMainWindow):
             for x in range(0,self.listwidget.count()):
                 self.videoVentana.addFile(self.listwidget.itemAt(x).text())
             print(err)
-
     def removeFile(self):
         index = self.listwidget.currentRow()
         if index!=-1:
@@ -423,25 +404,67 @@ class Controles(QMainWindow):
                 print(str(self.listwidget.count()) + "<-listWidget playlist->" + str(self.videoVentana.count()))
             except Exception as err:
                 print(str(err))
-
-    def exitCall(self):
-        sys.exit(app.exec_())
-
+    #Media functions
     def play(self):
         item = self.listwidget.currentRow()
         self.videoVentana.play(item)#play/pause
-
     def stop(self):
         self.videoVentana.stop()#play/pause
-
+    #Window functions
+    def elegirPantalla(self):
+        self.seleccionarP = SeleccionPantalla()
+        self.seleccionarP.AsignarVideoWidget(self.videoVentana)
+        self.seleccionarP.resize(400,300)
+        self.seleccionarP.show()
+    def sigPantalla(self):
+        if self.indexScreen == QDesktopWidget().screenCount() - 1:
+            self.indexScreen = 0
+        else:
+            self.indexScreen = self.indexScreen + 1
+        monitor = QDesktopWidget().screenGeometry(self.indexScreen)
+        self.videoVentana.setGeometry(monitor)
+        self.videoVentana.FullScreen()
+        self.showPlayerButton.setText(self.strButtonHide)
+    def antPantalla(self):
+        if self.indexScreen == 0:
+            self.indexScreen = QDesktopWidget().screenCount() - 1
+        else:
+            self.indexScreen = self.indexScreen - 1
+        monitor = QDesktopWidget().screenGeometry(self.indexScreen)
+        self.videoVentana.setGeometry(monitor)
+        self.videoVentana.FullScreen()
+        self.showPlayerButton.setText(self.strButtonHide)
     def showPlayer(self):
-        if self.showPlayerButton.text() == "  Ver   Reproductor":
+        if self.showPlayerButton.text() == self.strButtonShow:
             self.videoVentana.show()
-            self.showPlayerButton.setText("Ocultar Reproductor")
+            self.showPlayerButton.setText(self.strButtonHide)
         else:
             self.videoVentana.hide()
-            self.showPlayerButton.setText("  Ver   Reproductor")
-        
+            self.showPlayerButton.setText(self.strButtonShow)
+    def maximizePlayer(self):
+        self.videoVentana.showFullScreen()
+        self.showPlayerButton.setText(self.strButtonHide)
+    def minimizePlayer(self):
+        self.videoVentana.showNormalS()
+        self.showPlayerButton.setText(self.strButtonHide)
+    #Events
+    def closeEvent(self, event):
+        buttonReply = QMessageBox.question(self, 'Question', "¿Close? Will close video window too.", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if buttonReply == QMessageBox.Yes:
+            try:
+                self.server.stop()
+            except Exception as err:
+                print("Error at closing Thread: "+str(err))
+            self.videoVentana.close()
+            self.close()
+        else:
+            print('No clicked.')
+            event.ignore()
+            return
+    def currentMediaChanged(self,actualMedia):
+        titulo = str(actualMedia.canonicalUrl().fileName())
+        self.videoVentana.setWindowTitle(titulo)
+        self.lblMediaActual.setText("Media actual: \n" + titulo)
     def mediaStateChanged(self, state):
         if self.videoVentana.mediaPlayer.state() == QMediaPlayer.PlayingState:
             self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
@@ -449,37 +472,32 @@ class Controles(QMainWindow):
         else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
             self.Reproduciendo = False
-
     def positionChanged(self, position):
         self.positionSlider.setValue(position)
-
     def durationChanged(self, duration):
         self.positionSlider.setRange(0, duration)
-
     def setPosition(self, position):
         self.videoVentana.mediaPlayer.setPosition(position)
-
     def handleError(self):
         #self.playButton.setEnabled(False)
         self.errorLabel.setText("Error: " + self.videoVentana.mediaPlayer.errorString())
-
+#Clase para elegir en que pantalla se va a mostrar el reproductor.
 class SeleccionPantalla(QMainWindow):
 
     def __init__(self, parent = None):
         super(SeleccionPantalla, self).__init__(parent)
         
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
-        self.setWindowTitle("Selección de pantalla") 
+        self.setWindowTitle("Chose screen") 
         self.videoVentana = VideoWindow()
         
-        #self.setLayout(layout)
         self.listwidget = QListWidget()
         for x in range(0,QDesktopWidget().screenCount()):
-            self.listwidget.insertItem(x, "Pantalla " + str(x))
+            self.listwidget.insertItem(x, "Screen " + str(x+1))
         
         self.seleccionarButton = QPushButton()
         self.seleccionarButton.setEnabled(True)
-        self.seleccionarButton.setText("Elegir")
+        self.seleccionarButton.setText("Ok")
         self.seleccionarButton.clicked.connect(self.SeleccionarPantallaPorIndice)
         
         # Create a widget for window contents
@@ -497,7 +515,6 @@ class SeleccionPantalla(QMainWindow):
         # Set widget to contain window contents
         wid.setLayout(layout)
 
-
     def AsignarVideoWidget(self,widget):
         self.videoVentana = widget
 
@@ -510,72 +527,81 @@ class SeleccionPantalla(QMainWindow):
             self.close()
         except Exception as err:
             print(err)
-            
-class Escucha:  #Clase que se usara para controlar desde app externa
-    # server.py
+#Clase que permite controlar el reproductor desde otro equipo a traves del socket especificado          
+class Server:  #Clase que se usa para controlar desde app externa
     def __init__(self,videoWin):
         self.videoVentana = videoWin
-        self._continuar = True
+        self._continue = True
 
     def stop(self):
-        self._continuar = False
+        self._continue = False
 
     def do_some_stuffs_with_input(self,input_string,vw):  
-        """
-        This is where all the processing happens.
-
-        Let's just read the string backwards
-        """
-        index=0
-        if input_string == "play":
+        do = input_string[0:4]
+        value = ""
+        if len(input_string) >= 5:
+            value = input_string[4:]
+        if do == "play":
             print('Playing..')
             vw.play()
-        elif input_string == "next":
-            print('Nexting')
-            vw.next()
-        elif input_string == "prev":
-            print("Previus")
-            vw.prev()
-        elif input_string == "stop":
+        elif do == "stop":
             print("Stop")
             vw.stop()
-        elif input_string == "insr":
+        elif do == "next":
+            print('Nexting')
+            vw.next()
+        elif do == "prev":
+            print("Previus")
+            vw.prev()
+        elif do == "setx":
+            print("Set index to "+value)
+            try:
+                vw.setIndex(int(value))
+            except Exception as err:
+                print("Error at set index: "+value)
+        elif do == "insr":
             print("Insert:")
-            vw.addFile("")
-        elif input_string == "remv":
+            vw.addFile(value)
+        elif do == "remv":
             print("Remove index:")
             vw.removeFile(index)
-        elif input_string == "scnx":
+        elif do == "scnx":
             print("Change to Next Screen")
-        elif input_string == "scpv":
+        elif do == "scpv":
             print("Change to Previus Screen")
-        elif input_string == "exit":
-            raise Exception("SALIR")
-        print("Processing that nasty input!")
+        elif do == "gtls":
+            list = vw.getListNames()
+            print("Getting list "+str(list))
+            return list
+        #elif do == "exit":
+            #raise Exception("SALIR")
+        #print("Processing that nasty input!")
         return input_string[::-1]
 
     def client_thread(self,conn, ip, port,vw, MAX_BUFFER_SIZE = 4096):
+        no_wait = True
+        while no_wait:    
+            # the input is in bytes, so decode it
+            input_from_client_bytes = conn.recv(MAX_BUFFER_SIZE)
 
-        # the input is in bytes, so decode it
-        input_from_client_bytes = conn.recv(MAX_BUFFER_SIZE)
+            # MAX_BUFFER_SIZE is how big the message can be
+            # this is test if it's sufficiently big
+            import sys
+            siz = sys.getsizeof(input_from_client_bytes)
+            if  siz >= MAX_BUFFER_SIZE:
+                print("The length of input is probably too long: {}".format(siz))
 
-        # MAX_BUFFER_SIZE is how big the message can be
-        # this is test if it's sufficiently big
-        import sys
-        siz = sys.getsizeof(input_from_client_bytes)
-        if  siz >= MAX_BUFFER_SIZE:
-            print("The length of input is probably too long: {}".format(siz))
+            # decode input and strip the end of line
+            input_from_client = input_from_client_bytes.decode("utf8").rstrip()
 
-        # decode input and strip the end of line
-        input_from_client = input_from_client_bytes.decode("utf8").rstrip()
-
-        res = self.do_some_stuffs_with_input(input_from_client,vw)
-        print("Result of processing {} is: {}".format(input_from_client, res))
-
-        vysl = res.encode("utf8")  # encode the result string
-        conn.sendall(vysl)  # send it to client
-        conn.close()  # close connection
-        print('Connection ' + ip + ':' + port + " ended")
+            res = self.do_some_stuffs_with_input(input_from_client,vw)
+            #print("Result of processing {} is: {}".format(input_from_client, res))
+            
+            vysl = res.encode("utf8")  # encode the result string
+            conn.sendall(vysl)  # send it to client
+            conn.close()  # close connection
+            print('Connection ' + ip + ':' + port + " ended")
+            no_wait=False
 
     def start_server(self,_port):
 
@@ -602,18 +628,21 @@ class Escucha:  #Clase que se usara para controlar desde app externa
 
         # this will make an infinite loop needed for 
         # not reseting server for every client
-        while self._continuar:
-            conn, addr = soc.accept()
-            ip, port = str(addr[0]), str(addr[1])
-            print('Accepting connection from ' + ip + ':' + port)
-            try:
-                Thread(target=self.client_thread, args=(conn, ip, port,self.videoVentana)).start()
-            except:
-                print("Terible error!")
-                import traceback
-                traceback.print_exc()
+        try:
+            while self._continue:
+                conn, addr = soc.accept()
+                ip, port = str(addr[0]), str(addr[1])
+                print('Accepting connection from ' + ip + ':' + port)
+                try:
+                    Thread(target=self.client_thread, args=(conn, ip, port,self.videoVentana)).start()
+                except:
+                    print("Terible error!")
+                    import traceback
+                    traceback.print_exc()
+        except Exception as err:
+            print(err)
         soc.close()
-        print("Terminar")
+        print("Terminated")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
