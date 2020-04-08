@@ -118,7 +118,6 @@ class VideoWindow(QMainWindow):
             except Exception as err:
                 print('Error al remover el archivo "'+str(index)+'", total de elementos: '+str(self.mediaPlayer.playlist().mediaCount()))
 
-
     def play(self,index=-1):
         contador = self.count()
         if index != -1:
@@ -152,10 +151,19 @@ class VideoWindow(QMainWindow):
                 media = self.mediaPlayer.playlist().media(x)
                 name = os.path.splitext(os.path.basename(media.canonicalUrl().fileName()))[0]
                 #list.append(name)   
-                list += name+"**"     
+                list += name+"||"     
             except Exception as err:
                 print(err)
         return list
+
+    def getMediaName(self):
+        try:                
+            media = self.mediaPlayer.playlist().currentMedia()
+            name = os.path.splitext(os.path.basename(media.canonicalUrl().fileName()))[0]
+            return str(name)
+        except Exception as err:
+            print(err)
+        return ""
 
     def showNormalS(self):
         try:
@@ -527,7 +535,7 @@ class SeleccionPantalla(QMainWindow):
             self.close()
         except Exception as err:
             print(err)
-#Clase que permite controlar el reproductor desde otro equipo a traves del socket especificado          
+#Clase que permite controlar el reproductor desde otro equipo a traves del socket/puerto especificado          
 class Server:  #Clase que se usa para controlar desde app externa
     def __init__(self,videoWin):
         self.videoVentana = videoWin
@@ -539,6 +547,7 @@ class Server:  #Clase que se usa para controlar desde app externa
     def do_some_stuffs_with_input(self,input_string,vw):  
         do = input_string[0:4]
         value = ""
+        returnValue = ""
         if len(input_string) >= 5:
             value = input_string[4:]
         if do == "play":
@@ -557,8 +566,10 @@ class Server:  #Clase que se usa para controlar desde app externa
             print("Set index to "+value)
             try:
                 vw.setIndex(int(value))
+                returnValue = "true"
             except Exception as err:
                 print("Error at set index: "+value)
+                returnValue = "false"
         elif do == "insr":
             print("Insert:")
             vw.addFile(value)
@@ -572,11 +583,15 @@ class Server:  #Clase que se usa para controlar desde app externa
         elif do == "gtls":
             list = vw.getListNames()
             print("Getting list "+str(list))
-            return list
+            returnValue = str(list)
+        elif do == "gtmd":
+            media = vw.getMediaName()
+            print("Getting media "+str(media))
+            returnValue = str(media)
         #elif do == "exit":
             #raise Exception("SALIR")
-        #print("Processing that nasty input!")
-        return input_string[::-1]
+        #print("Processing that nasty input!")#input_string[::-1]
+        return do+str(returnValue)
 
     def client_thread(self,conn, ip, port,vw, MAX_BUFFER_SIZE = 4096):
         no_wait = True
