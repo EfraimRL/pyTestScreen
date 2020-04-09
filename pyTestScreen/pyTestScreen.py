@@ -19,6 +19,7 @@ class VideoWindow(QMainWindow):
     def __init__(self, parent=None):
         super(VideoWindow, self).__init__(parent)
         self.setWindowTitle("PyQt Video Player Widget 2 Screens")
+        self.indexScreen = 0
                 
         self.playlist = QMediaPlaylist()
         self.mediaPlayer = QMediaPlayer(None, QMediaPlayer.VideoSurface)
@@ -67,11 +68,8 @@ class VideoWindow(QMainWindow):
         #fileMenu.addAction(exitAction)
 
 
-    def setControles(self,controles):
+    def setControles(self, controles):
         self.controles = controles
-
-    def FullScreen(self):
-        self.showFullScreen()
 
     def openFile(self, item=''):
         #fileName, _ = QFileDialog.getOpenFileName(self, "Open Movie",QDir.homePath())
@@ -165,6 +163,9 @@ class VideoWindow(QMainWindow):
             print(err)
         return ""
 
+    def FullScreen(self):
+        self.showFullScreen()
+
     def showNormalS(self):
         try:
             #self.monitor = QDesktopWidget().screenGeometry()
@@ -179,7 +180,8 @@ class VideoWindow(QMainWindow):
         # geometry of the main window
         qr = self.frameGeometry()
         # center point of screen
-        cp = QDesktopWidget().availableGeometry().center()
+        #cp = QDesktopWidget().availableGeometry().center()
+        cp = QDesktopWidget().screenGeometry(self.indexScreen).center()
         # move rectangle's center point to screen's center point
         qr.moveCenter(cp)
         # top left of rectangle becomes top left of window centering it
@@ -187,6 +189,35 @@ class VideoWindow(QMainWindow):
 
     def count(self):
         return self.mediaPlayer.playlist().mediaCount()
+
+    def sigPantalla(self):
+        try:
+            if self.indexScreen == QDesktopWidget().screenCount() - 1:
+                self.indexScreen = 0
+            else:
+                self.indexScreen = self.indexScreen + 1
+            monitor = QDesktopWidget().screenGeometry(self.indexScreen)
+            self.move(monitor.x(),monitor.y())
+            self.FullScreen()
+            self.controles.showPlayerButton.setText(self.controles.strButtonHide)
+        except Exception as err:
+            print(str(err))
+    def antPantalla(self):
+        if self.indexScreen == 0:
+            self.indexScreen = QDesktopWidget().screenCount() - 1
+        else:
+            self.indexScreen = self.indexScreen - 1
+        monitor = QDesktopWidget().screenGeometry(self.indexScreen)
+        self.setGeometry(monitor)
+        self.FullScreen()
+        self.controles.showPlayerButton.setText(self.controles.strButtonHide)
+
+    def Visibility(self,state):
+        if state:
+            self.show()
+        else:
+            self.hide()
+
 #Clase principal que muestra los controles en pantalla, para controlar lo que hace el reproductor e inicia las otras clases. 
 class Controles(QMainWindow):
 
@@ -194,7 +225,6 @@ class Controles(QMainWindow):
         super(Controles, self).__init__(parent)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
         self.setWindowTitle("Controles") 
-        self.indexScreen = 0
         self.Reproduciendo = False
         self.strButtonShow = "  Ver   Reproductor"
         self.strButtonHide  = "Ocultar Reproductor"
@@ -425,23 +455,9 @@ class Controles(QMainWindow):
         self.seleccionarP.resize(400,300)
         self.seleccionarP.show()
     def sigPantalla(self):
-        if self.indexScreen == QDesktopWidget().screenCount() - 1:
-            self.indexScreen = 0
-        else:
-            self.indexScreen = self.indexScreen + 1
-        monitor = QDesktopWidget().screenGeometry(self.indexScreen)
-        self.videoVentana.setGeometry(monitor)
-        self.videoVentana.FullScreen()
-        self.showPlayerButton.setText(self.strButtonHide)
+        self.videoVentana.sigPantalla()
     def antPantalla(self):
-        if self.indexScreen == 0:
-            self.indexScreen = QDesktopWidget().screenCount() - 1
-        else:
-            self.indexScreen = self.indexScreen - 1
-        monitor = QDesktopWidget().screenGeometry(self.indexScreen)
-        self.videoVentana.setGeometry(monitor)
-        self.videoVentana.FullScreen()
-        self.showPlayerButton.setText(self.strButtonHide)
+        self.videoVentana.antPantalla()
     def showPlayer(self):
         if self.showPlayerButton.text() == self.strButtonShow:
             self.videoVentana.show()
@@ -455,6 +471,8 @@ class Controles(QMainWindow):
     def minimizePlayer(self):
         self.videoVentana.showNormalS()
         self.showPlayerButton.setText(self.strButtonHide)
+    def playerVisible(self):
+        return self.showPlayerButton.text() != self.strButtonShow
     #Events
     def closeEvent(self, event):
         buttonReply = QMessageBox.question(self, 'Question', "¿Close? Will close video window too.", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -531,6 +549,7 @@ class SeleccionPantalla(QMainWindow):
             index = self.listwidget.currentRow()
             self.monitor = QDesktopWidget().screenGeometry(index)
             self.videoVentana.setGeometry(self.monitor)
+            self.videoVentana.indexScreen = index
             self.videoVentana.FullScreen()
             self.close()
         except Exception as err:
@@ -545,53 +564,71 @@ class Server:  #Clase que se usa para controlar desde app externa
         self._continue = False
 
     def do_some_stuffs_with_input(self,input_string,vw):  
-        do = input_string[0:4]
-        value = ""
-        returnValue = ""
-        if len(input_string) >= 5:
-            value = input_string[4:]
-        if do == "play":
-            print('Playing..')
-            vw.play()
-        elif do == "stop":
-            print("Stop")
-            vw.stop()
-        elif do == "next":
-            print('Nexting')
-            vw.next()
-        elif do == "prev":
-            print("Previus")
-            vw.prev()
-        elif do == "setx":
-            print("Set index to "+value)
-            try:
-                vw.setIndex(int(value))
-                returnValue = "true"
-            except Exception as err:
-                print("Error at set index: "+value)
-                returnValue = "false"
-        elif do == "insr":
-            print("Insert:")
-            vw.addFile(value)
-        elif do == "remv":
-            print("Remove index:")
-            vw.removeFile(index)
-        elif do == "scnx":
-            print("Change to Next Screen")
-        elif do == "scpv":
-            print("Change to Previus Screen")
-        elif do == "gtls":
-            list = vw.getListNames()
-            print("Getting list "+str(list))
-            returnValue = str(list)
-        elif do == "gtmd":
-            media = vw.getMediaName()
-            print("Getting media "+str(media))
-            returnValue = str(media)
-        #elif do == "exit":
-            #raise Exception("SALIR")
-        #print("Processing that nasty input!")#input_string[::-1]
-        return do+str(returnValue)
+        try:
+            do = input_string[0:4]
+            value = ""
+            returnValue = ""
+            if len(input_string) >= 5:
+                value = input_string[4:]
+            if do == "play":
+                print('Playing..')
+                vw.play()
+            elif do == "stop":
+                print("Stop")
+                vw.stop()
+            elif do == "next":
+                print('Nexting')
+                vw.next()
+            elif do == "prev":
+                print("Previus")
+                vw.prev()
+            elif do == "setx":
+                print("Set index to "+value)
+                try:
+                    vw.setIndex(int(value))
+                    returnValue = "true"
+                except Exception as err:
+                    print("Error at set index: "+value)
+                    returnValue = "false"
+            elif do == "insr":
+                print("Insert:")
+                vw.addFile(value)
+            elif do == "remv":
+                print("Remove index:")
+                vw.removeFile(index)
+            elif do == "scnx":
+                vw.sigPantalla()
+                print("Change to Next Screen")            
+            elif do == "scpv":
+                vw.antPantalla()
+                print("Change to Previus Screen")
+            elif do == "maxi":
+                vw.FullScreen()
+                print("Maximize")
+            elif do == "norm":
+                vw.showNormalS()
+                print("Normalize screen size")
+            elif do == "show":
+                vw.Visibility(True)
+                print("Show screen")
+            elif do == "hide":
+                vw.Visibility(False)
+                print("Hide screen")
+            elif do == "gtls":
+                list = vw.getListNames()
+                print("Getting list "+str(list))
+                returnValue = str(list)
+            elif do == "gtmd":
+                media = vw.getMediaName()
+                print("Getting media "+str(media))
+                returnValue = str(media)
+            #elif do == "exit":
+                #raise Exception("SALIR")
+            #print("Processing that nasty input!")#input_string[::-1]
+            return do+str(returnValue)
+        except Exception as err:
+            print(str(err))
+            return "erro"
 
     def client_thread(self,conn, ip, port,vw, MAX_BUFFER_SIZE = 4096):
         no_wait = True
